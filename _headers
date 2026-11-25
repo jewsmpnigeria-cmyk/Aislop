@@ -1,9 +1,7 @@
-/script/*
-  Content-Type: text/plain; charset=utf-8
-  Cache-Control: no-cache
-  Access-Control-Allow-Origin: *
-  X-Content-Type-Options: nosniff
-  X-Robots-Tag: noindex
-
 /*
   X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+
+/admin*
+  Cache-Control: no-store
+  X-Robots-Tag: noindex
