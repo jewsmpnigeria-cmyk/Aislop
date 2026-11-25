@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Script Loader</title>
+<style>
+  :root{
+    --bg:#14161c; --panel:#1c1f27; --line:#2d313c; --text:#e8eaf0; --muted:#8b91a1;
+    --accent:#5ee0c2; --accent-ink:#06231c;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    display:grid; place-items:center; padding:24px;
+  }
+  main{width:100%; max-width:560px}
+  h1{font-size:1.9rem; margin:0 0 6px; letter-spacing:-.02em}
+  p.sub{margin:0 0 28px; color:var(--muted)}
+  label{display:block; font-size:.9rem; color:var(--muted); margin-bottom:6px}
+  .row{display:flex; gap:8px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:4px 4px 4px 14px}
+  .row:focus-within{border-color:var(--accent)}
+  .prefix{color:var(--muted); font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.95rem; white-space:nowrap}
+  input{flex:1; min-width:0; background:transparent; border:0; color:var(--text); font:inherit; font-family:ui-monospace,Menlo,Consolas,monospace; padding:10px 6px; outline:none}
+  pre{
+    margin:18px 0 12px; padding:16px; background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; overflow-x:auto; font:.9rem/1.5 ui-monospace,Menlo,Consolas,monospace;
+    white-space:pre-wrap; word-break:break-all;
+  }
+  button{
+    background:var(--accent); color:var(--accent-ink); border:0; border-radius:8px;
+    font:inherit; font-weight:600; padding:10px 18px; cursor:pointer;
+  }
+  button:hover{filter:brightness(1.08)}
+  button:focus-visible,input:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+  .hint{margin-top:22px; font-size:.85rem; color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Script Loader</h1>
+  <p class="sub">Type a script name to get its loader line.</p>
+
+  <label for="name">Script name</label>
+  <div class="row">
+    <span class="prefix" id="prefix">/script/</span>
+    <input id="name" value="example" autocomplete="off" spellcheck="false" autocapitalize="none">
+  </div>
+
+  <pre id="out"></pre>
+  <button id="copy" type="button">Copy loader</button>
+
+  <p class="hint">Scripts are added by the site owner only.</p>
+</main>
+
+<script>
+  const nameEl = document.getElementById('name');
+  const out = document.getElementById('out');
+  const copy = document.getElementById('copy');
+  const origin = location.origin;
+
+  function line(){
+    const n = nameEl.value.trim().replace(/[^a-zA-Z0-9_\-.]/g,'') || 'scriptname';
+    return 'loadstring(game:HttpGet("' + origin + '/script/' + n + '"))()';
+  }
+  function render(){ out.textContent = line(); }
+  nameEl.addEventListener('input', render);
+  copy.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(line()); copy.textContent = 'Copied'; }
+    catch(e){ copy.textContent = 'Press and hold to copy'; }
+    setTimeout(() => copy.textContent = 'Copy loader', 1500);
+  });
+  render();
+</script>
+</body>
+</html>
