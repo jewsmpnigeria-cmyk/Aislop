@@ -70,9 +70,13 @@ const $ = id => document.getElementById(id);
 let pw = sessionStorage.getItem('pw') || '';
 
 async function call(method, path, body) {
-  const r = await fetch(path, { method, body, headers: { Authorization: 'Bearer ' + pw } });
-  if (r.status === 401) { logout('Wrong password'); throw new Error('Wrong password'); }
-  if (!r.ok) throw new Error(await r.text());
+  let r;
+  try { r = await fetch(path, { method, body, headers: { Authorization: 'Bearer ' + pw } }); }
+  catch (e) { throw new Error('Cannot reach the site: ' + e.message); }
+  const type = r.headers.get('content-type') || '';
+  if (r.status === 401) { logout('Wrong password, or the ADMIN_PASSWORD secret is not set / not redeployed yet.'); throw new Error('AUTH'); }
+  if (type.includes('text/html')) throw new Error('The worker is not running (got a web page instead of the API). Re-upload the folder with _worker.js at the root.');
+  if (!r.ok) throw new Error(r.status + ': ' + (await r.text()).slice(0, 200));
   return r;
 }
 
@@ -108,12 +112,15 @@ async function refresh() {
 }
 function btn(t, cls, fn) {
   const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = t;
-  b.addEventListener('click', () => fn().catch(e => say(e.message, true))); return b;
+  b.addEventListener('click', () => fn().catch(e => say(e.message === 'AUTH' ? '' : e.message, true))); return b;
 }
 
 async function enter() {
-  try { await refresh(); $('login').classList.add('hidden'); $('app').classList.remove('hidden'); say(''); }
-  catch (e) { if (e.message !== 'Wrong password') $('loginMsg').textContent = e.message; }
+  const msg = $('loginMsg'), b = $('loginBtn');
+  msg.textContent = 'Logging in...'; msg.style.color = 'var(--muted)'; b.disabled = true;
+  try { await refresh(); $('login').classList.add('hidden'); $('app').classList.remove('hidden'); say(''); msg.textContent = ''; }
+  catch (e) { if (e.message !== 'AUTH') { msg.textContent = e.message; msg.style.color = 'var(--danger)'; } else { msg.style.color = 'var(--danger)'; } }
+  b.disabled = false;
 }
 
 $('loginBtn').addEventListener('click', () => { pw = $('pw').value; sessionStorage.setItem('pw', pw); enter(); });
@@ -133,7 +140,7 @@ $('save').addEventListener('click', async () => {
   try {
     await call('PUT', '/api/scripts/' + encodeURIComponent(n), $('code').value);
     say('Saved. Live at /script/' + n); refresh();
-  } catch (e) { say(e.message, true); }
+  } catch (e) { say(e.message === 'AUTH' ? 'Session expired' : e.message, true); }
 });
 
 if (pw) enter();
