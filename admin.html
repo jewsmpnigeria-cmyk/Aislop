@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Admin</title>
+<style>
+  :root{--bg:#14161c;--panel:#1c1f27;--line:#2d313c;--text:#e8eaf0;--muted:#8b91a1;--accent:#5ee0c2;--ink:#06231c;--danger:#ff7b7b}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:20px}
+  main{max-width:720px;margin:0 auto}
+  h1{font-size:1.6rem;margin:8px 0 18px;letter-spacing:-.02em}
+  h2{font-size:1.05rem;margin:28px 0 10px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+  input,textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:10px 12px;font:inherit;outline:none}
+  textarea{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.88rem;min-height:260px;resize:vertical;white-space:pre}
+  input:focus,textarea:focus{border-color:var(--accent)}
+  label{display:block;font-size:.85rem;color:var(--muted);margin:12px 0 6px}
+  button{background:var(--accent);color:var(--ink);border:0;border-radius:8px;font:inherit;font-weight:600;padding:9px 16px;cursor:pointer}
+  button.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+  button.danger{background:transparent;color:var(--danger);border:1px solid var(--line)}
+  button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+  .grow{flex:1}
+  .item{display:flex;gap:8px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+  .item:first-child{border-top:0}
+  .item .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .item button{padding:6px 10px;font-size:.85rem}
+  .msg{min-height:1.4em;color:var(--muted);font-size:.9rem}
+  .msg.err{color:var(--danger)}
+  .hidden{display:none}
+  .empty{color:var(--muted);padding:6px 0}
+</style>
+</head>
+<body>
+<main>
+  <h1>Script admin</h1>
+
+  <section id="login" class="panel">
+    <label for="pw" style="margin-top:0">Password</label>
+    <input id="pw" type="password" autocomplete="current-password">
+    <div class="bar"><button id="loginBtn" type="button">Log in</button><span id="loginMsg" class="msg err"></span></div>
+  </section>
+
+  <section id="app" class="hidden">
+    <div class="bar" style="margin:0 0 8px"><span class="grow msg" id="status"></span><button id="logout" class="ghost" type="button">Log out</button></div>
+
+    <div class="panel">
+      <label for="name" style="margin-top:0">Script name (becomes /script/name)</label>
+      <input id="name" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="mygame">
+      <label for="code">Code</label>
+      <textarea id="code" spellcheck="false" placeholder="-- paste your script here"></textarea>
+      <div class="bar">
+        <button id="save" type="button">Save script</button>
+        <button id="clear" class="ghost" type="button">Clear</button>
+        <label class="ghost" style="margin:0;border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer;color:var(--text)">
+          Load from file<input id="file" type="file" accept=".lua,.luau,.txt,text/plain" class="hidden">
+        </label>
+      </div>
+    </div>
+
+    <h2>Your scripts</h2>
+    <div id="list" class="panel"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let pw = sessionStorage.getItem('pw') || '';
+
+async function call(method, path, body) {
+  const r = await fetch(path, { method, body, headers: { Authorization: 'Bearer ' + pw } });
+  if (r.status === 401) { logout('Wrong password'); throw new Error('Wrong password'); }
+  if (!r.ok) throw new Error(await r.text());
+  return r;
+}
+
+function say(msg, err) { const s = $('status'); s.textContent = msg; s.className = 'grow msg' + (err ? ' err' : ''); }
+
+function logout(msg) {
+  pw = ''; sessionStorage.removeItem('pw');
+  $('app').classList.add('hidden'); $('login').classList.remove('hidden');
+  $('loginMsg').textContent = msg || ''; $('pw').value = '';
+}
+
+async function refresh() {
+  const names = await (await call('GET', '/api/scripts')).json();
+  const list = $('list'); list.textContent = '';
+  if (!names.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = 'No scripts yet. Save one above.'; list.append(e); return; }
+  for (const n of names) {
+    const row = document.createElement('div'); row.className = 'item';
+    const label = document.createElement('span'); label.className = 'n'; label.textContent = n;
+    const edit = btn('Edit', 'ghost', async () => {
+      const code = await (await call('GET', '/api/scripts/' + encodeURIComponent(n))).text();
+      $('name').value = n; $('code').value = code; scrollTo({ top: 0, behavior: 'smooth' }); say('Editing ' + n);
+    });
+    const copy = btn('Copy loader', 'ghost', async () => {
+      const line = 'loadstring(game:HttpGet("' + location.origin + '/script/' + n + '"))()';
+      try { await navigator.clipboard.writeText(line); say('Loader copied'); } catch { say(line); }
+    });
+    const del = btn('Delete', 'danger', async () => {
+      if (!confirm('Delete ' + n + '?')) return;
+      await call('DELETE', '/api/scripts/' + encodeURIComponent(n)); say('Deleted ' + n); refresh();
+    });
+    row.append(label, edit, copy, del); list.append(row);
+  }
+}
+function btn(t, cls, fn) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = t;
+  b.addEventListener('click', () => fn().catch(e => say(e.message, true))); return b;
+}
+
+async function enter() {
+  try { await refresh(); $('login').classList.add('hidden'); $('app').classList.remove('hidden'); say(''); }
+  catch (e) { if (e.message !== 'Wrong password') $('loginMsg').textContent = e.message; }
+}
+
+$('loginBtn').addEventListener('click', () => { pw = $('pw').value; sessionStorage.setItem('pw', pw); enter(); });
+$('pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginBtn').click(); });
+$('logout').addEventListener('click', () => logout());
+$('clear').addEventListener('click', () => { $('name').value = ''; $('code').value = ''; say(''); });
+$('file').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $('code').value = await f.text();
+  if (!$('name').value) $('name').value = f.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_\-.]/g, '');
+  e.target.value = '';
+});
+$('save').addEventListener('click', async () => {
+  const n = $('name').value.trim();
+  if (!/^[a-zA-Z0-9_\-.]{1,64}$/.test(n)) return say('Name: letters, numbers, - _ . only', true);
+  if (!$('code').value.trim()) return say('Code is empty', true);
+  try {
+    await call('PUT', '/api/scripts/' + encodeURIComponent(n), $('code').value);
+    say('Saved. Live at /script/' + n); refresh();
+  } catch (e) { say(e.message, true); }
+});
+
+if (pw) enter();
+</script>
+</body>
+</html>
